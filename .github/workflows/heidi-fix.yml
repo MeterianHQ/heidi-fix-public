@@ -1,0 +1,162 @@
+name: Heidi Fix
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: The repository file of Heidi Fix.
+        type: string
+        required: false
+        default: .heidi-fix.yml
+      java-version:
+        description: The JDK of the build of the repository. Empty keeps the JDK of the runner.
+        type: string
+        required: false
+        default: ''
+      node-version:
+        description: >-
+          The Node.js of the build of the repository. Empty keeps the Node.js of the runner.
+          Claude Code runs with this Node.js too, and needs Node.js 22 or later.
+        type: string
+        required: false
+        default: ''
+      python-version:
+        description: The Python of the build of the repository. Empty keeps the Python of the runner.
+        type: string
+        required: false
+        default: ''
+    secrets:
+      METERIAN_API_TOKEN:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      HEIDI_FIX_GITHUB_TOKEN:
+        required: false
+
+permissions: {}
+
+jobs:
+  fix:
+    name: Find, fix, and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    outputs:
+      run-exit-code: ${{ steps.heidi-fix.outputs.run-exit-code }}
+      has-fixes: ${{ steps.heidi-fix.outputs.has-fixes }}
+    steps:
+      - name: Check the event
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          echo "::error::Heidi Fix runs only for the events schedule and workflow_dispatch, not for $EVENT_NAME."
+          exit 1
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - if: inputs.java-version != ''
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - if: inputs.node-version != ''
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - if: inputs.python-version != ''
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Run the setup action of the repository
+        if: hashFiles('.github/actions/heidi-fix-setup/action.yml') != ''
+        uses: ./.github/actions/heidi-fix-setup
+
+      - id: heidi-fix
+        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.3
+        with:
+          config: ${{ inputs.config }}
+          meterian-api-token: ${{ secrets.METERIAN_API_TOKEN }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          fail-on-error: 'false'
+
+  publish:
+    name: Open the pull requests
+    needs: fix
+    if: needs.fix.outputs.has-fixes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: heidi-fix-publish-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      publish-exit-code: ${{ steps.heidi-fix.outputs.publish-exit-code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
+
+      - id: heidi-fix
+        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.3
+        with:
+          config: ${{ inputs.config }}
+          github-token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
+          fail-on-error: 'false'
+
+      - name: Explain the checks of the pull requests
+        if: steps.heidi-fix.outputs.publish-exit-code == '0'
+        shell: bash
+        env:
+          HAS_OWN_TOKEN: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN != '' }}
+        run: |
+          if [ "$HAS_OWN_TOKEN" != "true" ]; then
+            {
+              echo "The checks of the repository do not start for these pull requests. Close and reopen a pull request, or set the secret HEIDI_FIX_GITHUB_TOKEN."
+              echo "With HEIDI_FIX_GITHUB_TOKEN, the checks of the repository run on the change of the agent, with the secrets of the repository, before a person reviews it."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  result:
+    name: Result
+    needs: [fix, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Decide the result
+        shell: bash
+        env:
+          FIX_RESULT: ${{ needs.fix.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          RUN_EXIT_CODE: ${{ needs.fix.outputs.run-exit-code }}
+          PUBLISH_EXIT_CODE: ${{ needs.publish.outputs.publish-exit-code }}
+        run: |
+          if [ "$FIX_RESULT" != "success" ]; then
+            echo "::error::The job fix ends with the result $FIX_RESULT."
+            exit 1
+          fi
+          if [ "$PUBLISH_RESULT" != "success" ] && [ "$PUBLISH_RESULT" != "skipped" ]; then
+            echo "::error::The job publish ends with the result $PUBLISH_RESULT."
+            exit 1
+          fi
+          if [ "$RUN_EXIT_CODE" != "0" ]; then
+            echo "::error::heidi-fix run gives the exit code $RUN_EXIT_CODE. Read the summary of the job fix."
+            exit 1
+          fi
+          if [ "$PUBLISH_RESULT" = "success" ] && [ "$PUBLISH_EXIT_CODE" != "0" ]; then
+            echo "::error::heidi-fix publish gives the exit code $PUBLISH_EXIT_CODE. Read the summary of the job publish."
+            exit 1
+          fi
+          echo "Heidi Fix completes without a problem."

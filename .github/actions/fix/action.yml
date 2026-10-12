@@ -1,0 +1,190 @@
+name: Heidi Fix - fix
+description: >-
+  Finds and fixes the vulnerable dependencies, verifies each fix with the build and the tests,
+  and keeps each verified fix as a local branch. This job must not have a write token.
+
+inputs:
+  config:
+    description: The repository file of Heidi Fix.
+    required: false
+    default: .heidi-fix.yml
+  meterian-api-token:
+    description: The token of the Meterian scanner.
+    required: true
+  claude-code-oauth-token:
+    description: The Claude subscription token, from "claude setup-token".
+    required: true
+  run-directory:
+    description: The run directory of Heidi Fix. It must be outside the checkout. Empty gives $RUNNER_TEMP/heidi-fix-run.
+    required: false
+    default: ''
+  fail-on-error:
+    description: true makes the action fail when Heidi Fix fails. The reusable workflow sets false, because its job "result" decides.
+    required: false
+    default: 'true'
+
+outputs:
+  run-exit-code:
+    description: The exit code of "heidi-fix run".
+    value: ${{ steps.run.outputs.run-exit-code }}
+  has-fixes:
+    description: true when the run has one or more verified local branches and no secret.
+    value: ${{ steps.secret-check.outputs.has-fixes }}
+
+runs:
+  using: composite
+  steps:
+    - name: Choose the run directory
+      id: directory
+      shell: bash
+      env:
+        RUN_DIRECTORY: ${{ inputs.run-directory }}
+      run: echo "path=${RUN_DIRECTORY:-$RUNNER_TEMP/heidi-fix-run}" >> "$GITHUB_OUTPUT"
+
+    - name: Check the branch
+      shell: bash
+      run: |
+        if [[ "$GITHUB_REF_NAME" == heidi-fix/* ]]; then
+          echo "::error::Heidi Fix does not run on its own branch $GITHUB_REF_NAME. Run it on the default branch."
+          exit 1
+        fi
+
+    - name: Check the secrets
+      shell: bash
+      env:
+        METERIAN_API_TOKEN: ${{ inputs.meterian-api-token }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+      run: |
+        missing=0
+        if [ -z "$METERIAN_API_TOKEN" ]; then
+          echo "::error::Set the secret METERIAN_API_TOKEN: copy a token from your Meterian account."
+          missing=1
+        fi
+        if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+          echo "::error::Set the secret CLAUDE_CODE_OAUTH_TOKEN: run 'claude setup-token'."
+          missing=1
+        fi
+        exit "$missing"
+
+    - name: Check the Java
+      shell: bash
+      run: |
+        if [ ! -x "${JAVA_HOME_21_X64:-}/bin/java" ]; then
+          echo "::error::Heidi Fix needs a GitHub-hosted x64 runner with a JDK 21 (JAVA_HOME_21_X64)."
+          exit 1
+        fi
+
+    - name: Install Heidi Fix
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/install-heidi-fix.sh"
+
+    - name: Check the Node.js
+      shell: bash
+      run: |
+        node_major="$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || true)"
+        if ! [[ "$node_major" =~ ^[0-9]+$ ]] || [ "$node_major" -lt 22 ]; then
+          echo "::error::Claude Code needs Node.js 22 or later. Set the input node-version to 22 or later, or leave it empty."
+          exit 1
+        fi
+
+    - name: Install Claude Code
+      shell: bash
+      run: npm install --global --no-fund --no-audit @anthropic-ai/claude-code@2.1.296
+
+    - name: Run Heidi Fix
+      id: run
+      shell: bash
+      env:
+        METERIAN_API_TOKEN: ${{ inputs.meterian-api-token }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        CONFIG: ${{ inputs.config }}
+        RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+      run: |
+        # The output of the agent cannot give workflow commands until the end token.
+        stop_token="$(openssl rand -hex 16)"
+        echo "::stop-commands::${stop_token}"
+        set +e
+        "$JAVA_HOME_21_X64/bin/java" -jar "$HEIDI_FIX_JAR" run --agent claude --publish local --config "$CONFIG" \
+          --set components.evidence-reporter=json,markdown --run-dir "$RUN_DIRECTORY" --no-color . 2>&1
+        exit_code=$?
+        set -e
+        echo "::${stop_token}::"
+        echo "run-exit-code=$exit_code" >> "$GITHUB_OUTPUT"
+
+    - name: Make the bundle and check the run for secrets
+      id: secret-check
+      if: always()
+      shell: bash
+      env:
+        BASH_ENV: ''
+        METERIAN_API_TOKEN: ${{ inputs.meterian-api-token }}
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+      run: |
+        base_commit="$(git rev-parse HEAD)"
+        bundle="$RUN_DIRECTORY/fixes.bundle"
+        changes="$RUNNER_TEMP/heidi-fix-changes.txt"
+        mkdir -p "$RUN_DIRECTORY"
+        rm -f "$bundle"
+        : > "$changes"
+        # The check reads the commits of the bundle, so the bundle and the checked changes are the same.
+        if [ -n "$(git for-each-ref --format='%(refname)' refs/heads/heidi-fix/)" ]; then
+          git bundle create "$bundle" --branches='heidi-fix/*' --not "$base_commit"
+          bundle_heads="$(git bundle list-heads "$bundle")"
+          mapfile -t bundle_tips < <(cut --delimiter=' ' --fields=1 <<< "$bundle_heads")
+          git log --patch --diff-merges=first-parent --text --no-textconv --no-ext-diff "${bundle_tips[@]}" --not "$base_commit" > "$changes"
+        fi
+        found=false
+        for secret in "$METERIAN_API_TOKEN" "$CLAUDE_CODE_OAUTH_TOKEN"; do
+          if [ -z "$secret" ]; then
+            continue
+          fi
+          for file in "$RUN_DIRECTORY/report.json" "$RUN_DIRECTORY/report.md" "$changes"; do
+            if [ -f "$file" ] && grep --quiet --text --fixed-strings -e "$secret" "$file"; then
+              found=true
+            fi
+          done
+        done
+        rm -f "$changes"
+        if [ "$found" = true ]; then
+          rm -f "$bundle" "$RUN_DIRECTORY"/report.*
+          echo "has-fixes=false" >> "$GITHUB_OUTPUT"
+          echo "::error::The run contains a secret. Heidi Fix does not upload it and does not publish the fixes."
+          exit 1
+        fi
+        echo "clean=true" >> "$GITHUB_OUTPUT"
+        if [ -f "$bundle" ]; then
+          echo "has-fixes=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "has-fixes=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Write the summary
+      if: always() && steps.secret-check.outputs.clean == 'true'
+      shell: bash
+      env:
+        RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+      run: |
+        if [ -f "$RUN_DIRECTORY/report.md" ]; then
+          cat "$RUN_DIRECTORY/report.md" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Save the report and the bundle
+      if: always() && steps.secret-check.outputs.clean == 'true'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: heidi-fix-run
+        path: |
+          ${{ steps.directory.outputs.path }}/report.json
+          ${{ steps.directory.outputs.path }}/fixes.bundle
+        retention-days: 7
+        if-no-files-found: warn
+
+    - name: Fail when Heidi Fix fails
+      if: always() && inputs.fail-on-error == 'true' && steps.run.outputs.run-exit-code != '0'
+      shell: bash
+      env:
+        RUN_EXIT_CODE: ${{ steps.run.outputs.run-exit-code }}
+      run: |
+        echo "::error::heidi-fix run gives the exit code ${RUN_EXIT_CODE:-unknown}. Read the summary of the job."
+        exit 1
