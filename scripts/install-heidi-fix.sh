@@ -2,8 +2,8 @@
 # Downloads heidi-fix.jar of this release to $RUNNER_TEMP/heidi-fix, checks its SHA-256, and gives its path.
 set -euo pipefail
 
-release_tag="v0.1.0-alpha.3"
-expected_sha256="ed83c48ad0ee5d8218504272fd57c01a2b1e090f2452bb3cd7d40329bb35c4fb"
+release_tag="v0.1.0-alpha.4"
+expected_sha256="0c48bc3f2a5589fc0d5fdbf5df65e0b9c9aba3e61ff81e773cfad07a87ab9b36"
 download_url="https://github.com/MeterianHQ/heidi-fix-public/releases/download/${release_tag}"
 install_directory="${RUNNER_TEMP}/heidi-fix"
 

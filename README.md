@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   heidi-fix:
-    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.3
+    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.4
     permissions:
       contents: write
       pull-requests: write
