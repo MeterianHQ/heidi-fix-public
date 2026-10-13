@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   heidi-fix:
-    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.5
+    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.6
     permissions:
       contents: write
       pull-requests: write
@@ -174,13 +174,13 @@ Java. Use the program for your platform:
 | macOS arm64 (Apple silicon) | `heidi-fix-macos-arm64` |
 
 To download and check the program, do these steps. The example uses Linux
-x64 and the version `v0.1.0-alpha.5`.
+x64 and the version `v0.1.0-alpha.6`.
 
 1. Download the program and its checksum file. For another platform, replace
    `linux-x64` with the platform of the table:
 
    ```bash
-   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.5
+   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.6
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64"
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64.sha256"
    ```
