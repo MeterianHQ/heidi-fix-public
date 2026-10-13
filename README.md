@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   heidi-fix:
-    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.4
+    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.5
     permissions:
       contents: write
       pull-requests: write
@@ -40,8 +40,8 @@ jobs:
 
 6. Start the workflow from the tab Actions, or wait for the schedule.
 
-The tag of the line `uses:` gives the workflow, the actions, and the jar of
-one version of Heidi Fix. To get a new version, change this tag.
+The tag of the line `uses:` gives the workflow, the actions, and the native
+programs of one version of Heidi Fix. To get a new version, change this tag.
 
 The permissions of the caller are the maximum. Each job of the workflow
 uses less. The job that runs the agent gets only `contents: read`.
@@ -52,7 +52,8 @@ Heidi Fix runs the build and the tests of your repository on
 `ubuntu-latest`. The runner has many tools, for example a JDK 17, Node.js 22,
 and Python 3.12. These versions are examples, and they change with the image
 of the runner. The [list of the runner image](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md)
-gives the current versions. Heidi Fix itself runs with the JDK 21 of the runner.
+gives the current versions. Heidi Fix itself is a native program and needs no
+JDK.
 
 To use another version, add an input:
 
@@ -161,6 +162,45 @@ A later run can make the same fix with the same branch name. When the pull
 request of this branch is open, Heidi Fix gives this pull request again. It
 does not push the branch again and does not open a second pull request.
 
+## Download the command-line program
+
+Each release has a native program for each platform. The program needs no
+Java. Use the program for your platform:
+
+| Platform | Release file |
+|---|---|
+| Linux x64 | `heidi-fix-linux-x64` |
+| Linux arm64 | `heidi-fix-linux-arm64` |
+| macOS arm64 (Apple silicon) | `heidi-fix-macos-arm64` |
+
+To download and check the program, do these steps. The example uses Linux
+x64 and the version `v0.1.0-alpha.5`.
+
+1. Download the program and its checksum file. For another platform, replace
+   `linux-x64` with the platform of the table:
+
+   ```bash
+   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.5
+   curl --fail --location --remote-name "$base/heidi-fix-linux-x64"
+   curl --fail --location --remote-name "$base/heidi-fix-linux-x64.sha256"
+   ```
+
+2. Check the SHA-256: run `sha256sum -c heidi-fix-linux-x64.sha256`. On
+   macOS, use `shasum -a 256 -c heidi-fix-macos-arm64.sha256` with the macOS
+   files. If the check fails, do not use the program.
+3. Run `chmod +x heidi-fix-linux-x64`.
+4. Run `./heidi-fix-linux-x64 --help`.
+
+On macOS, a download with a browser gets the quarantine flag. The program has
+no Apple signature, so macOS then refuses it. Run
+`xattr -d com.apple.quarantine heidi-fix-macos-arm64` to remove the flag. A
+download with `curl` does not get the flag.
+
+The Linux programs need glibc 2.39 or later, for example Ubuntu 24.04 or
+later. The macOS program needs a macOS version that is the same as the macOS
+of the GitHub runner `macos-latest`, or later. An older system stops the
+program with a loader error.
+
 ## Common problems
 
 | Line in the log | What to do |
@@ -171,6 +211,7 @@ does not push the branch again and does not open a second pull request.
 | `Heidi Fix does not run on its own branch` | Run the workflow on the default branch, not on a branch `heidi-fix/...`. |
 | `The run contains a secret` | Heidi Fix uploads nothing and publishes nothing. Make new tokens. Then read the log of the job `fix`. |
 | `not permitted to create or approve pull requests` | Do steps 3 and 4 of the setup, or set the secret `HEIDI_FIX_GITHUB_TOKEN`. |
-| `The SHA-256 of heidi-fix.jar ... is not correct` | Do not use the jar. Tell Meterian. |
+| `The SHA-256 of heidi-fix-... is not correct` | Do not use the program. Tell Meterian. |
+| `Heidi Fix has no program for the runner` | Use a runner Linux X64, Linux ARM64, or macOS ARM64. The reusable workflow uses `ubuntu-latest`. |
 | `has changes that are not committed` | Change the setup action so that it writes outside the checkout, for example in `$RUNNER_TEMP`. |
 | `heidi-fix run gives the exit code ...` | A remediation failed, or the run stopped. Read the summary of the job `fix`. The verified fixes still get their pull requests. |

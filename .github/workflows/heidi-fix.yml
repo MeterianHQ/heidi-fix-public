@@ -80,7 +80,7 @@ jobs:
         uses: ./.github/actions/heidi-fix-setup
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.4
+        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.5
         with:
           config: ${{ inputs.config }}
           meterian-api-token: ${{ secrets.METERIAN_API_TOKEN }}
@@ -108,7 +108,7 @@ jobs:
           token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.4
+        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.5
         with:
           config: ${{ inputs.config }}
           github-token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}

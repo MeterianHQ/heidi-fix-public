@@ -49,14 +49,6 @@ runs:
         git bundle verify "$RUN_DIRECTORY/fixes.bundle"
         git fetch --no-tags --quiet "$RUN_DIRECTORY/fixes.bundle" 'refs/heads/heidi-fix/*:refs/heads/heidi-fix/*'
 
-    - name: Check the Java
-      shell: bash
-      run: |
-        if [ ! -x "${JAVA_HOME_21_X64:-}/bin/java" ]; then
-          echo "::error::Heidi Fix needs a GitHub-hosted x64 runner with a JDK 21 (JAVA_HOME_21_X64)."
-          exit 1
-        fi
-
     - name: Install Heidi Fix
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/../../../scripts/install-heidi-fix.sh"
@@ -74,7 +66,7 @@ runs:
         stop_token="$(openssl rand -hex 16)"
         echo "::stop-commands::${stop_token}"
         set +e
-        "$JAVA_HOME_21_X64/bin/java" -jar "$HEIDI_FIX_JAR" publish --from "$RUN_DIRECTORY" --publish github \
+        "$HEIDI_FIX_PROGRAM" publish --from "$RUN_DIRECTORY" --publish github \
           --config "$CONFIG" --run-dir "$RUNNER_TEMP/heidi-fix-publish" --no-color . 2>&1 | tee "$output"
         exit_code=${PIPESTATUS[0]}
         set -e

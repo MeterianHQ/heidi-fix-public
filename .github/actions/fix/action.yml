@@ -66,14 +66,6 @@ runs:
         fi
         exit "$missing"
 
-    - name: Check the Java
-      shell: bash
-      run: |
-        if [ ! -x "${JAVA_HOME_21_X64:-}/bin/java" ]; then
-          echo "::error::Heidi Fix needs a GitHub-hosted x64 runner with a JDK 21 (JAVA_HOME_21_X64)."
-          exit 1
-        fi
-
     - name: Install Heidi Fix
       shell: bash
       run: bash "$GITHUB_ACTION_PATH/../../../scripts/install-heidi-fix.sh"
@@ -104,7 +96,7 @@ runs:
         stop_token="$(openssl rand -hex 16)"
         echo "::stop-commands::${stop_token}"
         set +e
-        "$JAVA_HOME_21_X64/bin/java" -jar "$HEIDI_FIX_JAR" run --agent claude --publish local --config "$CONFIG" \
+        "$HEIDI_FIX_PROGRAM" run --agent claude --publish local --config "$CONFIG" \
           --set components.evidence-reporter=json,markdown --run-dir "$RUN_DIRECTORY" --no-color . 2>&1
         exit_code=$?
         set -e
@@ -131,7 +123,16 @@ runs:
         if [ -n "$(git for-each-ref --format='%(refname)' refs/heads/heidi-fix/)" ]; then
           git bundle create "$bundle" --branches='heidi-fix/*' --not "$base_commit"
           bundle_heads="$(git bundle list-heads "$bundle")"
-          mapfile -t bundle_tips < <(cut --delimiter=' ' --fields=1 <<< "$bundle_heads")
+          # A while loop and read work with the bash 3.2 and the BSD tools of macOS.
+          bundle_tips=()
+          while read -r bundle_tip bundle_reference; do
+            bundle_tips+=("$bundle_tip")
+          done <<< "$bundle_heads"
+          if [ "${#bundle_tips[@]}" -eq 0 ]; then
+            rm -f "$bundle"
+            echo "::error::Heidi Fix cannot read the commits of the bundle. It does not upload the fixes."
+            exit 1
+          fi
           git log --patch --diff-merges=first-parent --text --no-textconv --no-ext-diff "${bundle_tips[@]}" --not "$base_commit" > "$changes"
         fi
         found=false
