@@ -19,6 +19,18 @@ inputs:
     description: true makes the action fail when Heidi Fix fails. The reusable workflow sets false, because its job "result" decides.
     required: false
     default: 'true'
+  current-branch:
+    description: The form of --current-branch of the job fix, split, chain, or empty.
+    required: false
+    default: ''
+  start-commit:
+    description: The output start-commit of the action fix. A form in current-branch needs it.
+    required: false
+    default: ''
+  replace-branches:
+    description: true replaces the fix branches and the pull requests of an earlier run, with --replace-branches.
+    required: false
+    default: 'false'
 
 outputs:
   publish-exit-code:
@@ -45,9 +57,32 @@ runs:
       shell: bash
       env:
         RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+        START_COMMIT: ${{ inputs.start-commit }}
       run: |
-        git bundle verify "$RUN_DIRECTORY/fixes.bundle"
-        git fetch --no-tags --quiet "$RUN_DIRECTORY/fixes.bundle" 'refs/heads/heidi-fix/*:refs/heads/heidi-fix/*'
+        fetch_fixes="$GITHUB_ACTION_PATH/../../../scripts/fetch-fixes.sh"
+        fetch_arguments=("$RUN_DIRECTORY/fixes.bundle")
+        if [ "$CURRENT_BRANCH_FORM" = chain ]; then
+          # The checkout of this job, not the report of the job fix, gives the current branch.
+          if ! current_reference="$(git symbolic-ref --quiet HEAD)"; then
+            echo "::error::HEAD is a detached commit, so the chain form has no current branch."
+            exit 1
+          fi
+          current_branch="${current_reference#refs/heads/}"
+          fetch_arguments+=("$current_branch" "$START_COMMIT")
+        fi
+        # The ref names of the bundle cannot give workflow commands until the end token.
+        stop_token="$(openssl rand -hex 16)"
+        echo "::stop-commands::${stop_token}"
+        set +e
+        bash "$fetch_fixes" "${fetch_arguments[@]}"
+        exit_code=$?
+        set -e
+        echo "::${stop_token}::"
+        if [ "$exit_code" -ne 0 ]; then
+          echo "::error::Heidi Fix cannot get the fixes from the bundle. Read the log of the step."
+          exit "$exit_code"
+        fi
 
     - name: Install Heidi Fix
       shell: bash
@@ -60,13 +95,33 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         CONFIG: ${{ inputs.config }}
         RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+        REPLACE_BRANCHES: ${{ inputs.replace-branches }}
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+        START_COMMIT: ${{ inputs.start-commit }}
       run: |
+        options=()
+        if [ "$REPLACE_BRANCHES" = true ]; then
+          options+=(--replace-branches)
+        fi
+        # The inputs of this job, not the report of the job fix, give the form and the start commit of the run.
+        if [ "$CURRENT_BRANCH_FORM" = split ]; then
+          options+=(--current-branch=split)
+        elif [ "$CURRENT_BRANCH_FORM" = chain ]; then
+          options+=(--current-branch)
+        fi
+        if [ -n "$CURRENT_BRANCH_FORM" ]; then
+          if [ -z "$START_COMMIT" ]; then
+            echo "::error::The input start-commit is empty, so Heidi Fix cannot check the run of the job fix."
+            exit 1
+          fi
+          options+=(--start-commit "$START_COMMIT")
+        fi
         output="$RUNNER_TEMP/heidi-fix-publish.txt"
         # The files of the job fix cannot give workflow commands until the end token.
         stop_token="$(openssl rand -hex 16)"
         echo "::stop-commands::${stop_token}"
         set +e
-        "$HEIDI_FIX_PROGRAM" publish --from "$RUN_DIRECTORY" --publish github \
+        "$HEIDI_FIX_PROGRAM" publish --from "$RUN_DIRECTORY" --publish github ${options[@]+"${options[@]}"} \
           --config "$CONFIG" --run-dir "$RUNNER_TEMP/heidi-fix-publish" --no-color . 2>&1 | tee "$output"
         exit_code=${PIPESTATUS[0]}
         set -e

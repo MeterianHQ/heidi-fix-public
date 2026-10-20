@@ -25,6 +25,13 @@ on:
         type: string
         required: false
         default: ''
+      current-branch:
+        description: >-
+          For a pull request: split opens one pull request for each fix, chain opens one pull request with all the
+          fixes. Both go into the branch of the pull request.
+        type: string
+        required: false
+        default: split
     secrets:
       METERIAN_API_TOKEN:
         required: false
@@ -36,27 +43,41 @@ on:
 permissions: {}
 
 jobs:
+  event:
+    name: Check the event
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - id: check
+        uses: MeterianHQ/heidi-fix-public/.github/actions/check-event@v0.1.0-alpha.7
+        with:
+          current-branch: ${{ inputs.current-branch }}
+
   fix:
     name: Find, fix, and verify
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    needs: event
+    if: needs.event.outputs.run == 'true'
+    concurrency:
+      group: heidi-fix-fix-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       contents: read
     outputs:
       run-exit-code: ${{ steps.heidi-fix.outputs.run-exit-code }}
       has-fixes: ${{ steps.heidi-fix.outputs.has-fixes }}
+      start-commit: ${{ steps.heidi-fix.outputs.start-commit }}
     steps:
-      - name: Check the event
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          echo "::error::Heidi Fix runs only for the events schedule and workflow_dispatch, not for $EVENT_NAME."
-          exit 1
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # A pull request needs its branch, not the merge commit, and the history for the merge base.
+          # The full name refs/heads/ selects the branch, never a tag with the same name.
+          ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || '' }}
+          fetch-depth: ${{ github.event_name != 'pull_request' && 1 || 0 }}
           persist-credentials: false
 
       - if: inputs.java-version != ''
@@ -80,11 +101,13 @@ jobs:
         uses: ./.github/actions/heidi-fix-setup
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.6
+        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.7
         with:
           config: ${{ inputs.config }}
           meterian-api-token: ${{ secrets.METERIAN_API_TOKEN }}
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          current-branch: ${{ github.event_name == 'pull_request' && inputs.current-branch || '' }}
+          changes-since: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
           fail-on-error: 'false'
 
   publish:
@@ -97,21 +120,26 @@ jobs:
       contents: write
       pull-requests: write
     concurrency:
-      group: heidi-fix-publish-${{ github.repository }}
+      group: heidi-fix-publish-${{ github.repository }}-${{ github.event.pull_request.number || 'default' }}
       cancel-in-progress: false
     outputs:
       publish-exit-code: ${{ steps.heidi-fix.outputs.publish-exit-code }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The full name refs/heads/ selects the branch, never a tag with the same name.
+          ref: ${{ github.event_name == 'pull_request' && format('refs/heads/{0}', github.head_ref) || '' }}
           fetch-depth: 0
           token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.6
+        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.7
         with:
           config: ${{ inputs.config }}
           github-token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
+          current-branch: ${{ github.event_name == 'pull_request' && inputs.current-branch || '' }}
+          start-commit: ${{ needs.fix.outputs.start-commit }}
+          replace-branches: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           fail-on-error: 'false'
 
       - name: Explain the checks of the pull requests
@@ -129,7 +157,7 @@ jobs:
 
   result:
     name: Result
-    needs: [fix, publish]
+    needs: [event, fix, publish]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -138,11 +166,21 @@ jobs:
       - name: Decide the result
         shell: bash
         env:
+          EVENT_RESULT: ${{ needs.event.result }}
+          RUN: ${{ needs.event.outputs.run }}
           FIX_RESULT: ${{ needs.fix.result }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
           RUN_EXIT_CODE: ${{ needs.fix.outputs.run-exit-code }}
           PUBLISH_EXIT_CODE: ${{ needs.publish.outputs.publish-exit-code }}
         run: |
+          if [ "$EVENT_RESULT" != "success" ]; then
+            echo "::error::The job event ends with the result $EVENT_RESULT."
+            exit 1
+          fi
+          if [ "$RUN" != "true" ]; then
+            echo "Heidi Fix does not run for this event."
+            exit 0
+          fi
           if [ "$FIX_RESULT" != "success" ]; then
             echo "::error::The job fix ends with the result $FIX_RESULT."
             exit 1

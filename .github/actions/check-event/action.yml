@@ -1,0 +1,29 @@
+name: Heidi Fix - check the event
+description: >-
+  Decides if Heidi Fix runs for the event of the workflow. It refuses a pull request from a fork and an unknown event,
+  and it skips a pull request of Heidi Fix. It reads only the event data and needs no secret.
+
+inputs:
+  current-branch:
+    description: The form of the fixes for a pull request, split or chain.
+    required: false
+    default: split
+
+outputs:
+  run:
+    description: true when Heidi Fix runs for the event, false for a pull request of Heidi Fix.
+    value: ${{ steps.check.outputs.run }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the event
+      id: check
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        REPOSITORY: ${{ github.repository }}
+        HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        HEAD_BRANCH: ${{ github.head_ref }}
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/check-event.sh"

@@ -18,6 +18,15 @@ inputs:
     description: The run directory of Heidi Fix. It must be outside the checkout. Empty gives $RUNNER_TEMP/heidi-fix-run.
     required: false
     default: ''
+  current-branch:
+    description: >-
+      The form of --current-branch for a pull request: split, chain, or empty. Empty runs without --current-branch.
+    required: false
+    default: ''
+  changes-since:
+    description: The reference of --changes-since, for example origin/main. Empty scans the whole repository.
+    required: false
+    default: ''
   fail-on-error:
     description: true makes the action fail when Heidi Fix fails. The reusable workflow sets false, because its job "result" decides.
     required: false
@@ -30,6 +39,9 @@ outputs:
   has-fixes:
     description: true when the run has one or more verified local branches and no secret.
     value: ${{ steps.secret-check.outputs.has-fixes }}
+  start-commit:
+    description: The commit of HEAD before the run. The job publish needs it for the chain form.
+    value: ${{ steps.start.outputs.commit }}
 
 runs:
   using: composite
@@ -44,8 +56,9 @@ runs:
     - name: Check the branch
       shell: bash
       run: |
-        if [[ "$GITHUB_REF_NAME" == heidi-fix/* ]]; then
-          echo "::error::Heidi Fix does not run on its own branch $GITHUB_REF_NAME. Run it on the default branch."
+        branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+        if [[ "$branch" == heidi-fix/* ]]; then
+          echo "::error::Heidi Fix does not run on its own branch $branch."
           exit 1
         fi
 
@@ -54,6 +67,7 @@ runs:
       env:
         METERIAN_API_TOKEN: ${{ inputs.meterian-api-token }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        ACTOR: ${{ github.actor }}
       run: |
         missing=0
         if [ -z "$METERIAN_API_TOKEN" ]; then
@@ -63,6 +77,9 @@ runs:
         if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
           echo "::error::Set the secret CLAUDE_CODE_OAUTH_TOKEN: run 'claude setup-token'."
           missing=1
+        fi
+        if [ "$missing" -ne 0 ] && [ "$ACTOR" = "dependabot[bot]" ]; then
+          echo "::error::A Dependabot pull request gets only the Dependabot secrets. Set the secrets also as Dependabot secrets."
         fi
         exit "$missing"
 
@@ -79,6 +96,28 @@ runs:
           exit 1
         fi
 
+    - name: Record the start of the run
+      id: start
+      shell: bash
+      env:
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+      run: |
+        case "$CURRENT_BRANCH_FORM" in
+          ''|split|chain) ;;
+          *)
+            echo "::error::The input current-branch must be split, chain, or empty."
+            exit 1
+            ;;
+        esac
+        echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        if [ -n "$CURRENT_BRANCH_FORM" ]; then
+          if ! branch="$(git symbolic-ref --quiet --short HEAD)"; then
+            echo "::error::HEAD is a detached commit, so --current-branch has no branch. Check out the branch of the pull request."
+            exit 1
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Install Claude Code
       shell: bash
       run: npm install --global --no-fund --no-audit @anthropic-ai/claude-code@2.1.296
@@ -91,12 +130,27 @@ runs:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         CONFIG: ${{ inputs.config }}
         RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+        CHANGES_SINCE: ${{ inputs.changes-since }}
       run: |
+        options=()
+        if [ -n "$CHANGES_SINCE" ]; then
+          options+=(--changes-since "$CHANGES_SINCE")
+        fi
+        case "$CURRENT_BRANCH_FORM" in
+          '') ;;
+          chain) options+=(--current-branch) ;;
+          split) options+=(--current-branch=split) ;;
+          *)
+            echo "::error::The input current-branch must be split, chain, or empty."
+            exit 1
+            ;;
+        esac
         # The output of the agent cannot give workflow commands until the end token.
         stop_token="$(openssl rand -hex 16)"
         echo "::stop-commands::${stop_token}"
         set +e
-        "$HEIDI_FIX_PROGRAM" run --agent claude --publish local --config "$CONFIG" \
+        "$HEIDI_FIX_PROGRAM" run --agent claude --publish local --config "$CONFIG" ${options[@]+"${options[@]}"} \
           --set components.evidence-reporter=json,markdown --run-dir "$RUN_DIRECTORY" --no-color . 2>&1
         exit_code=$?
         set -e
@@ -105,23 +159,29 @@ runs:
 
     - name: Make the bundle and check the run for secrets
       id: secret-check
-      if: always()
+      if: always() && steps.start.outputs.commit != ''
       shell: bash
       env:
         BASH_ENV: ''
         METERIAN_API_TOKEN: ${{ inputs.meterian-api-token }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
+        START_COMMIT: ${{ steps.start.outputs.commit }}
+        CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
+        CURRENT_BRANCH: ${{ steps.start.outputs.branch }}
       run: |
-        base_commit="$(git rev-parse HEAD)"
         bundle="$RUN_DIRECTORY/fixes.bundle"
         changes="$RUNNER_TEMP/heidi-fix-changes.txt"
         mkdir -p "$RUN_DIRECTORY"
-        rm -f "$bundle"
         : > "$changes"
+        # In the chain form, the publisher local moves the current branch to the chain, so the bundle takes it too.
+        chain_branch=""
+        if [ "$CURRENT_BRANCH_FORM" = chain ]; then
+          chain_branch="$CURRENT_BRANCH"
+        fi
+        bash "$GITHUB_ACTION_PATH/../../../scripts/bundle-fixes.sh" "$bundle" "$START_COMMIT" "$chain_branch"
         # The check reads the commits of the bundle, so the bundle and the checked changes are the same.
-        if [ -n "$(git for-each-ref --format='%(refname)' refs/heads/heidi-fix/)" ]; then
-          git bundle create "$bundle" --branches='heidi-fix/*' --not "$base_commit"
+        if [ -f "$bundle" ]; then
           bundle_heads="$(git bundle list-heads "$bundle")"
           # A while loop and read work with the bash 3.2 and the BSD tools of macOS.
           bundle_tips=()
@@ -133,7 +193,7 @@ runs:
             echo "::error::Heidi Fix cannot read the commits of the bundle. It does not upload the fixes."
             exit 1
           fi
-          git log --patch --diff-merges=first-parent --text --no-textconv --no-ext-diff "${bundle_tips[@]}" --not "$base_commit" > "$changes"
+          git log --patch --diff-merges=first-parent --text --no-textconv --no-ext-diff "${bundle_tips[@]}" --not "$START_COMMIT" > "$changes"
         fi
         found=false
         for secret in "$METERIAN_API_TOKEN" "$CLAUDE_CODE_OAUTH_TOKEN"; do
