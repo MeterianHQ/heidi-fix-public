@@ -134,10 +134,6 @@ command sends one small request to the model. The output must contain `OK`.
 
 ## What changes with another provider
 
-- **The reachability analysis.** In the mode `auto`, Heidi Fix runs the
-  analysis only with a subscription. With another provider, the analysis
-  stays off. To turn it on, use `--reachability`. See
-  [the reachability analysis](configuration.md#the-reachability-analysis).
 - **The cost limits.** Claude Code calculates the cost with the prices of
   Anthropic. For another model, this cost can be wrong. The cost limit still
   applies. If the cost is wrong, raise `agent-cost-usd` and
