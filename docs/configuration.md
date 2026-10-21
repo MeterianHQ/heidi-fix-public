@@ -14,7 +14,7 @@ Heidi Fix reads two configuration files:
 
 The repository file cannot set these sections: `kiwi`, `limits`,
 `environment`, `verifier`, `validator`, `publishing`, `security`,
-`telemetry`, `open-telemetry`, `scope`, and `reachability`. These sections
+`telemetry`, `open-telemetry`, `scope`. These sections
 contain, for example, the budgets, the build commands, the remote, and the
 GitHub host. A pull request can change the repository file, so these
 sections stay in the user file.
