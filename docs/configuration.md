@@ -94,11 +94,7 @@ A run without an agent does not analyze the reachability. Do not use
 
 The agent tells which vulnerable code the application uses. Heidi Fix then
 fixes these dependencies first. The analysis costs one more agent task.
-
-Heidi Fix runs the analysis when the agent uses a subscription, for example
-`CLAUDE_CODE_OAUTH_TOKEN`. With an API key, the analysis costs money, so it
-stays off. `--reachability` turns it on, and `--reachability=off` turns it
-off.
+The analysis is off by default. `--reachability` turns it on for one run.
 
 ## The security mode
 
