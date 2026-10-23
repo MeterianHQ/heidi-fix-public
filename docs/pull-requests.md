@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   heidi-fix:
-    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.7
+    uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.8
     permissions:
       contents: write
       pull-requests: write

@@ -27,6 +27,11 @@ inputs:
     description: The reference of --changes-since, for example origin/main. Empty scans the whole repository.
     required: false
     default: ''
+  upgrade-maximum:
+    description: >-
+      The highest kind of upgrade of a dependency: patch, minor, or major. Empty keeps the default major.
+    required: false
+    default: ''
   fail-on-error:
     description: true makes the action fail when Heidi Fix fails. The reusable workflow sets false, because its job "result" decides.
     required: false
@@ -132,10 +137,15 @@ runs:
         RUN_DIRECTORY: ${{ steps.directory.outputs.path }}
         CURRENT_BRANCH_FORM: ${{ inputs.current-branch }}
         CHANGES_SINCE: ${{ inputs.changes-since }}
+        UPGRADE_MAXIMUM: ${{ inputs.upgrade-maximum }}
       run: |
         options=()
         if [ -n "$CHANGES_SINCE" ]; then
           options+=(--changes-since "$CHANGES_SINCE")
+        fi
+        # The configuration loader checks the value and stops the run when it is wrong.
+        if [ -n "$UPGRADE_MAXIMUM" ]; then
+          options+=(--set "upgrade.maximum=$UPGRADE_MAXIMUM")
         fi
         case "$CURRENT_BRANCH_FORM" in
           '') ;;

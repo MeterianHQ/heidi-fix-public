@@ -32,6 +32,11 @@ on:
         type: string
         required: false
         default: split
+      upgrade-maximum:
+        description: "The highest kind of upgrade of a dependency: patch, minor, or major. Empty keeps the default major."
+        type: string
+        required: false
+        default: ''
     secrets:
       METERIAN_API_TOKEN:
         required: false
@@ -52,7 +57,7 @@ jobs:
       run: ${{ steps.check.outputs.run }}
     steps:
       - id: check
-        uses: MeterianHQ/heidi-fix-public/.github/actions/check-event@v0.1.0-alpha.7
+        uses: MeterianHQ/heidi-fix-public/.github/actions/check-event@v0.1.0-alpha.8
         with:
           current-branch: ${{ inputs.current-branch }}
 
@@ -101,13 +106,14 @@ jobs:
         uses: ./.github/actions/heidi-fix-setup
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.7
+        uses: MeterianHQ/heidi-fix-public/.github/actions/fix@v0.1.0-alpha.8
         with:
           config: ${{ inputs.config }}
           meterian-api-token: ${{ secrets.METERIAN_API_TOKEN }}
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           current-branch: ${{ github.event_name == 'pull_request' && inputs.current-branch || '' }}
           changes-since: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+          upgrade-maximum: ${{ inputs.upgrade-maximum }}
           fail-on-error: 'false'
 
   publish:
@@ -133,7 +139,7 @@ jobs:
           token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}
 
       - id: heidi-fix
-        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.7
+        uses: MeterianHQ/heidi-fix-public/.github/actions/publish@v0.1.0-alpha.8
         with:
           config: ${{ inputs.config }}
           github-token: ${{ secrets.HEIDI_FIX_GITHUB_TOKEN || github.token }}

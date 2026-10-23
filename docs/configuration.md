@@ -14,9 +14,9 @@ Heidi Fix reads two configuration files:
 
 The repository file cannot set these sections: `kiwi`, `limits`,
 `environment`, `verifier`, `validator`, `publishing`, `security`,
-`telemetry`, `open-telemetry`, `scope`. These sections
-contain, for example, the budgets, the build commands, the remote, and the
-GitHub host. A pull request can change the repository file, so these
+`telemetry`, `open-telemetry`, `scope`, `reachability`, `upgrade`, and
+`repair`. These sections contain, for example, the budgets, the build
+commands, the remote, and the GitHub host. A pull request can change the repository file, so these
 sections stay in the user file.
 
 To change a setting for one run, use `--set <key>=<value>`, for example
@@ -45,6 +45,50 @@ policy:
 
 A `policy` section replaces the complete default policy. To keep the
 AUTO-CPEDIA entry, repeat it in your policy.
+
+## The maximum upgrade
+
+The setting `upgrade.maximum` limits the kind of upgrade of a dependency.
+It has three values:
+
+- `patch`: the fix can change only the patch number, for example 2.3.1 to 2.3.4.
+- `minor`: the fix can change the minor number, for example 2.3.1 to 2.9.0.
+- `major`: the fix can change the major number. This is the default.
+
+A fix that needs a higher upgrade gets the result `FAILED`. When the value is
+`patch` or `minor`, a version that Heidi Fix cannot read is above the limit.
+
+To set the limit for one run, use `--set upgrade.maximum=minor`. To set it
+for each run, use the user file:
+
+```yaml
+upgrade:
+  maximum: minor
+```
+
+The repository file cannot set this section.
+In GitHub Actions, use the input `upgrade-maximum`. See
+[The input `upgrade-maximum`](github-actions.md#the-input-upgrade-maximum).
+
+## The settings of repair
+
+The section `repair` holds the settings of the command
+[`heidi-fix repair`](command-line.md#repair-a-branch-after-an-upgrade):
+
+| Setting | Option | Content |
+|---|---|---|
+| `repair.base` | `--base` | The base branch of the comparison. The default is the branch in the variable `GITHUB_BASE_REF`, else the default branch of the remote. |
+| `repair.upgrades` | `--upgrade` | The upgraded libraries, as `<ecosystem>:<name>:<version>`. Join two or more values with `,`. These values replace the comparison of the dependency trees. |
+
+The user file or `--set` can set these settings, for example:
+
+```yaml
+repair:
+  base: origin/develop
+```
+
+The repository file cannot set this section. Only `repair` uses these
+settings: `--set repair.base=...` with another command is an error.
 
 ## The budget of the agent
 
@@ -94,7 +138,11 @@ A run without an agent does not analyze the reachability. Do not use
 
 The agent tells which vulnerable code the application uses. Heidi Fix then
 fixes these dependencies first. The analysis costs one more agent task.
-The analysis is off by default. `--reachability` turns it on for one run.
+
+Heidi Fix runs the analysis when the agent uses a subscription, for example
+`CLAUDE_CODE_OAUTH_TOKEN`. With an API key, the analysis costs money, so it
+stays off. `--reachability` turns it on, and `--reachability=off` turns it
+off.
 
 ## The security mode
 
@@ -153,6 +201,44 @@ The repository file cannot set this section. Set it in the user file.
 Heidi Fix shows a warning for a name in `environment.add` that looks like a
 secret, for example `ANTHROPIC_AUTH_TOKEN`. The warning tells you that each
 process gets the variable, also the agents and the build tools.
+
+## An on-prem or a dedicated Meterian instance
+
+By default, Heidi Fix gets the vulnerability data from the public Meterian
+service. An on-prem or a dedicated Meterian instance gives the same data
+through the Meterian API. To use your instance, set `kiwi.api` to `meterian`
+in the user file, and give the base URL of the instance:
+
+```yaml
+kiwi:
+  api:          meterian
+  url:          https://meterian.example.com
+  discovery:    false
+```
+
+Then give your Meterian API token in the variable `METERIAN_API_TOKEN`:
+
+```sh
+export METERIAN_API_TOKEN=...
+heidi-fix run .
+```
+
+Heidi Fix reads `METERIAN_API_TOKEN` only when `kiwi.api` is `meterian`. Do
+not write the token in a configuration file. These rules apply:
+
+- `url` is required. Heidi Fix stops when only the defaults give it.
+- `discovery` must be `false`.
+- The URL must use `https`, because each request sends the token.
+- The URL can have a path, for example `https://tools.example.com/meterian`.
+- `max-parallel` must be from 1 to 99. The default is 10.
+
+The Meterian API accepts less than 100 requests at the same time for one
+token. Thus, keep the sum of `kiwi.max-parallel` below 100 for all the runs
+that use one token at the same time.
+
+The repository file cannot set the `kiwi` section. For one run, use `--set`
+for each setting, for example
+`--set kiwi.api=meterian --set kiwi.discovery=false --set kiwi.url=https://meterian.example.com`.
 
 ## A proxy
 

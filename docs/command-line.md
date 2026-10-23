@@ -15,8 +15,10 @@ For a short first run, read [Get started](getting-started.md).
 - An agent: Claude Code or Codex. See
   [Log in to an agent](#log-in-to-an-agent).
 
-Heidi Fix needs no Java and no Meterian account. The command line needs no
-Meterian token at this time. A future version can need one.
+Heidi Fix needs no Java. The public Meterian service needs no Meterian
+account and no token. An on-prem or a dedicated Meterian instance needs a
+Meterian API token. See
+[An on-prem or a dedicated Meterian instance](configuration.md#an-on-prem-or-a-dedicated-meterian-instance).
 
 ## Install the program
 
@@ -30,13 +32,13 @@ your platform:
 | macOS arm64 (Apple silicon) | `heidi-fix-macos-arm64` |
 
 To download and check the program, do these steps. The example uses Linux
-x64 and the version `v0.1.0-alpha.7`.
+x64 and the version `v0.1.0-alpha.8`.
 
 1. Download the program and its checksum file. For another platform, replace
    `linux-x64` with the platform of the table:
 
    ```bash
-   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.7
+   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.8
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64"
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64.sha256"
    ```
@@ -170,6 +172,66 @@ Heidi Fix moves your branch to the chain. The publisher `git-push` also pushes
 the chain to your branch. Use `--publish github` or `--current-branch=split`
 when a person must review the fixes before they reach your branch.
 
+## Repair a branch after an upgrade
+
+A pull request upgrades a library, and on its branch the code does not
+build, or tests fail. The command `heidi-fix repair` lets the agent repair the
+code of your current branch. The build and the tests of the base branch are
+the baseline.
+
+1. Check out the branch of the pull request.
+2. Fetch the base branch, for example with `git fetch origin main`.
+3. Run `heidi-fix repair --publish git-push`.
+
+```bash
+git fetch origin main
+heidi-fix repair --publish git-push
+```
+
+Heidi Fix compares the dependency trees of the base branch and of your branch
+to find the upgraded libraries. To give an upgraded library yourself, use
+`--upgrade <ecosystem>:<name>:<version>`. You can use it more than one time:
+
+```bash
+heidi-fix repair --base origin/main \
+  --upgrade maven:com.google.guava:guava:33.4.0-jre --publish github
+```
+
+| Option | Content |
+|---|---|
+| `--base <ref>` | The base branch. The default is the variable `GITHUB_BASE_REF`, else the default branch of the remote. |
+| `--upgrade <coordinate>` | An upgraded library, as `<ecosystem>:<name>:<version>`. It replaces the comparison of the dependency trees. |
+
+The command `repair` always puts the repair on your current branch as one
+chain of commits, so the caution above applies. It does not accept
+`--current-branch`, `--changed-only`, `--changes-since`, `--reachability`,
+`--start-commit`, or `--from`.
+
+- When your branch already passes, no agent runs. The console shows "The
+  branch passes. Nothing to repair", and the exit code is 0.
+- A repair cannot lower or remove an upgraded library. It also cannot
+  remove or change a line that your branch adds to a manifest, for example
+  `pom.xml`, `build.gradle`, or `package.json`. Such a repair is rejected. The
+  repair can add lines, for example a new dependency. The lockfiles and the
+  other build files, for example `gradle.properties` or `.mvn/maven.config`,
+  are not protected.
+- Without `--upgrade`, `repair` stops before the agent when it cannot read
+  the dependency tree of the base branch or of your branch, or when the trees
+  are empty. Then give the upgraded libraries with `--upgrade`.
+- With `--upgrade`, each upgraded library must be in the dependency tree of
+  your branch, with the same version. Else `repair` stops before the agent.
+- A repair that runs fewer tests than the base branch is rejected. When your
+  branch removes tests on purpose, set this setting in your user file
+  `~/.heidi-fix/config.yml`:
+
+  ```yaml
+  verifier:
+    allow-test-removal: true
+  ```
+
+To set `--base` or `--upgrade` in a file, see
+[The settings of repair](configuration.md#the-settings-of-repair).
+
 ## The report and the exit code
 
 Each run writes its files to a run directory,
@@ -177,7 +239,9 @@ Each run writes its files to a run directory,
 directory. The run directory contains:
 
 - `report.json`, the report of the run.
-- `evidence/`, the evidence of each fix, for example the test results.
+- `evidence/`, the evidence of each fix, for example the test results. For
+  `repair`, it also contains `base.txt`, the base branch and its commit, and
+  `upgrades.json`, the upgraded libraries.
 - `heidi-fix.log`, the log of the run.
 
 The console shows one line for each step. Use `--verbose` to see the details
@@ -185,7 +249,7 @@ of each step.
 
 | Exit code | Meaning |
 |---|---|
-| 0 | Each fix is verified and published. A run with nothing to fix also gives 0. |
+| 0 | Each fix is verified and published. A run with nothing to fix also gives 0. A `repair` of a branch that passes also gives 0. |
 | 1 | A step stopped the run, or one or more fixes are not verified. |
 | 2 | The command or the configuration is not correct. |
 | 3 | Heidi Fix did not write a complete report, or an internal error occurred. |

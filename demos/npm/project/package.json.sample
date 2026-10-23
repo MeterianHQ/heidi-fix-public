@@ -1,0 +1,12 @@
+{
+  "name": "echo-service",
+  "version": "1.0.0",
+  "private": true,
+  "main": "app.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "3.21.2"
+  }
+}

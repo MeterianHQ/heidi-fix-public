@@ -32,7 +32,7 @@ Claude Code.
 
    jobs:
      heidi-fix:
-       uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.7
+       uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.8
        permissions:
          contents: write
          pull-requests: write
@@ -118,6 +118,20 @@ The default repository file of Heidi Fix is `.heidi-fix.yml`. Use the input
 
 The page [The configuration](configuration.md) gives the settings of this
 file.
+
+## The input `upgrade-maximum`
+
+The input `upgrade-maximum` limits the kind of upgrade of a dependency. The
+values are `patch`, `minor`, and `major`. An empty input keeps the default
+`major`. Example:
+
+```yaml
+    with:
+      upgrade-maximum: minor
+```
+
+The repository file cannot set this limit. See
+[The maximum upgrade](configuration.md#the-maximum-upgrade).
 
 ## The optional secret `HEIDI_FIX_GITHUB_TOKEN`
 

@@ -2,7 +2,7 @@
 
 Read this page if you want to do a first run of Heidi Fix on your computer.
 
-The steps use Linux x64 and the version `v0.1.0-alpha.7`. Heidi Fix
+The steps use Linux x64 and the version `v0.1.0-alpha.8`. Heidi Fix
 also has programs for Linux arm64 and macOS arm64. See
 [Install the program](command-line.md#install-the-program). Before you
 start, read [What you need](command-line.md#what-you-need).
@@ -12,7 +12,7 @@ start, read [What you need](command-line.md#what-you-need).
 1. Download, check, and install the program:
 
    ```bash
-   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.7
+   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.8
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64"
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64.sha256"
    sha256sum -c heidi-fix-linux-x64.sha256 &&
