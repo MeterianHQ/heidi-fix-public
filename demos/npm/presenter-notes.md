@@ -169,8 +169,9 @@ budget of 20 US dollars. The verifier shows each change outside the expected fil
 Claude Code and Codex. Use `--agent codex` to select Codex.
 
 **"Can I fix only one dependency?"**
-Not with a flag. The policy selects the findings by severity (HIGH and more by
-default) and by CVSS score (7.0 and more by default).
+No. A flag cannot select one dependency. The policy selects the findings by
+severity, HIGH and more by default. `--set policy.severity=critical` changes the
+severity for one run.
 
 **"What does a normal run do?"**
 Without the demo flags, Heidi Fix puts each fix on its own branch. With a

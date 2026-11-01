@@ -32,13 +32,13 @@ your platform:
 | macOS arm64 (Apple silicon) | `heidi-fix-macos-arm64` |
 
 To download and check the program, do these steps. The example uses Linux
-x64 and the version `v0.1.0-alpha.8`.
+x64 and the version `v0.1.0-alpha.9`.
 
 1. Download the program and its checksum file. For another platform, replace
    `linux-x64` with the platform of the table:
 
    ```bash
-   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.8
+   base=https://github.com/MeterianHQ/heidi-fix-public/releases/download/v0.1.0-alpha.9
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64"
    curl --fail --location --remote-name "$base/heidi-fix-linux-x64.sha256"
    ```
@@ -118,6 +118,37 @@ A run does these steps:
    agent changes the code.
 4. It verifies each fix: the build, the tests, the diff, and a new scan.
 5. It makes a commit for each verified fix and publishes it.
+
+## Select the scans
+
+Heidi Fix can scan the dependencies (SCA) and the source code (SAST). Use
+this option with `plan` or `run`:
+
+```text
+--scan-type <all|sca|sast>
+```
+
+| Value | Scans |
+|---|---|
+| `sca` | The dependencies only. This is the default. |
+| `all` | SCA and then SAST. |
+| `sast` | The source code only. |
+
+Each real SAST finding costs agent quota.
+
+**A run with SAST can fail before the scans.** The SAST scan needs Opengrep.
+Opengrep has a binary only for Linux x64, Linux arm64, and macOS arm64. There
+is no binary for Windows or macOS x64. The not-bundled program downloads
+Opengrep from GitHub at run time. When the machine cannot reach GitHub, the
+preflight fails, and the SCA scan does not run either. Use the
+[bundled program](getting-started.md#the-bundled-program) on a supported
+platform.
+
+With `all`, the SAST scan runs after a successful SCA scan of a supported
+repository. A
+failed or not-applicable SCA scan stops the run before the SAST scan. To scan
+a repository without a supported manifest, use `--scan-type sast`. See
+[The scan type](configuration.md#the-scan-type).
 
 ## Where the fixes go
 

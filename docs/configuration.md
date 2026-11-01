@@ -24,16 +24,25 @@ To change a setting for one run, use `--set <key>=<value>`, for example
 
 ## The policy
 
-By default, Heidi Fix fixes the findings with the severity HIGH or CRITICAL,
-or with a CVSS score of 7.0 or more. The default also ignores the
-AUTO-CPEDIA advisories, which report unmaintained libraries. An upgrade
-cannot fix them. The reports show these findings as ignored.
+By default, Heidi Fix fixes the findings with the severity HIGH or CRITICAL.
+The default also ignores the AUTO-CPEDIA advisories, which report
+unmaintained libraries. An upgrade cannot fix them. The reports show these
+findings as ignored.
+
+**A change in this version.** The thresholds of the policy now combine: each
+threshold with a value must pass. Before, one threshold was sufficient. The
+default policy no longer has `cvss: 7.0`. A file that has `severity: high` and
+`cvss: 7.0` now selects fewer findings: a HIGH finding with a CVSS less than
+7.0 is not selected. To keep the HIGH findings, remove `cvss` from the file. The
+default policy does not select a finding with no severity but with a CVSS.
 
 The repository file or the user file can give another policy:
 
 ```yaml
 policy:
   severity: critical
+  cvss: 7.0
+  epss: 0.1
   ignore:
     - id: CVE-2025-43731
       reason: The vulnerable function is not used.
@@ -45,6 +54,64 @@ policy:
 
 A `policy` section replaces the complete default policy. To keep the
 AUTO-CPEDIA entry, repeat it in your policy.
+
+Each threshold is a minimum: `severity` (low, medium, high, or critical),
+`cvss` (0 to 10), and `epss` (0 to 1). A finding must pass each threshold that
+has a value for it. A threshold without a value does not count. A code finding
+has no CVSS and no EPSS, so only the severity applies to it. A policy without
+`severity` does not select a code finding. Examples with the
+policy above:
+
+| Finding | Selected | Why |
+|---|---|---|
+| CRITICAL, CVSS 9.8, EPSS 0.3 | Yes | It passes each threshold. |
+| CRITICAL, CVSS 9.8, EPSS 0.01 | No | The EPSS is less than 0.1. |
+| CRITICAL, CVSS 9.8, no EPSS | Yes | The EPSS threshold does not count. |
+| HIGH, CVSS 8.1, EPSS 0.5 | No | The severity is less than CRITICAL. |
+
+A finding with no value for the thresholds of the policy is not selected.
+`selection.json` shows the decision `NO_POLICY_DATA`. The reports show the
+reason "no value for the rule ..." or "no value for the rules ...".
+
+To change one threshold for one run, use `--set`:
+
+```text
+--set policy.severity=critical
+--set policy.cvss=7
+--set policy.epss=none
+```
+
+The value `none` removes the threshold. The other thresholds and the ignore
+list stay the same. `--set` cannot change the ignore list, because each entry
+needs a reason. Write the ignore list in a file.
+
+## The scan type
+
+The setting `scan-type` selects the scans. It has three values:
+
+| Value | Scans |
+|---|---|
+| `sca` | The dependencies only. This is the default. |
+| `all` | The dependencies (SCA) and then the source code (SAST). |
+| `sast` | The source code only. |
+
+Each real SAST finding costs agent quota.
+
+**A run with SAST can fail before the scans.** The SAST scan needs Opengrep.
+Opengrep has a binary only for Linux x64, Linux arm64, and macOS arm64. There
+is no binary for Windows or macOS x64. The not-bundled program downloads
+Opengrep from GitHub at run time. When the machine cannot reach GitHub, the
+preflight fails, and the SCA scan does not run either. Use the
+[bundled program](getting-started.md#the-bundled-program) on a supported
+platform.
+
+With `all`, the SAST scan runs after a successful SCA scan of a supported
+repository. A
+failed or not-applicable SCA scan stops the run before the SAST scan. To scan
+a repository without a supported manifest, use `--scan-type sast`.
+
+The repository file can only narrow the setting, for example from `all` to
+`sca`. To widen it, use the user file or `--scan-type`.
 
 ## The maximum upgrade
 

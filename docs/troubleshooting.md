@@ -31,8 +31,11 @@ Read this page if Heidi Fix stops with a message that you do not understand.
 | `The repair changes line ... of ..., which the branch adds` | The agent changes a line of a build file of the branch, so Heidi Fix rejects the repair. Run `repair` again, or repair the code yourself. |
 | `The repair changes line ...`, after a tool writes a manifest again | A tool can change the lines that the branch adds, for example `npm install` that changes the order of `package.json`. Keep the lines of the branch, or repair the branch by hand. |
 | `The branch changes the build file ..., but its diff is binary, so its lines cannot be protected` | Remove the `-diff` attribute or the Git LFS rule of the build file, or repair the branch by hand. |
+| `Opengrep has no binary for the operating system ...` or `The download of ... fails` | The SAST scan needs Opengrep. The platform has no Opengrep binary, or the machine cannot download it from GitHub. Use `--scan-type sca`, or use the [bundled program](getting-started.md#the-bundled-program) on a supported platform. |
 | macOS refuses the program | Remove the quarantine flag. See [Install the program](command-line.md#install-the-program). |
 | A loader error on Linux | Use a system with glibc 2.39 or later, for example Ubuntu 24.04. |
+| `The policy needs at least one threshold` | The `policy` section has no threshold, or `--set policy.<threshold>=none` removes the last threshold. Keep at least one of `severity`, `cvss`, and `epss`. See [The policy](configuration.md#the-policy). |
+| `policy.ignore can be set only in a file` | Write the ignore entries, with a reason, in the `policy` section of the repository file or the user file. See [The policy](configuration.md#the-policy). |
 
 ## Common problems in GitHub Actions
 

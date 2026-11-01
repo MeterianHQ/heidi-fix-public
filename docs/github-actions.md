@@ -32,7 +32,7 @@ Claude Code.
 
    jobs:
      heidi-fix:
-       uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.8
+       uses: MeterianHQ/heidi-fix-public/.github/workflows/heidi-fix.yml@v0.1.0-alpha.9
        permissions:
          contents: write
          pull-requests: write
@@ -118,6 +118,13 @@ The default repository file of Heidi Fix is `.heidi-fix.yml`. Use the input
 
 The page [The configuration](configuration.md) gives the settings of this
 file.
+
+## The SAST scan
+
+The workflow runs only the SCA scan. The default of `scan-type` is `sca`,
+and the workflow has no input for the SAST scan. A file inside the
+repository cannot widen `scan-type`. See
+[The scan type](configuration.md#the-scan-type).
 
 ## The input `upgrade-maximum`
 

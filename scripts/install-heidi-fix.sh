@@ -3,7 +3,7 @@
 # The script runs on Linux and on macOS, so it uses only the options that the BSD tools also know.
 set -euo pipefail
 
-release_tag="v0.1.0-alpha.8"
+release_tag="v0.1.0-alpha.9"
 download_url="https://github.com/MeterianHQ/heidi-fix-public/releases/download/${release_tag}"
 install_directory="${RUNNER_TEMP}/heidi-fix"
 program="${install_directory}/heidi-fix"
@@ -11,15 +11,15 @@ program="${install_directory}/heidi-fix"
 case "${RUNNER_OS:-} ${RUNNER_ARCH:-}" in
   "Linux X64")
     platform=linux-x64
-    expected_sha256="9159357cc34b7425e3973dfc2ba75c847fb1babc808e0a0fa835c14f9d6fb7cb"
+    expected_sha256="7afadaa9eb7d2b3f16570c2ad5be1fdc3be0e3426cc05ec12fdeba912b4061f6"
     ;;
   "Linux ARM64")
     platform=linux-arm64
-    expected_sha256="9f53f9fbdff531156b8de9250585445639d043565bb21c9d28c34279322c5a3e"
+    expected_sha256="0f7b9adb206de8b7c2548ee4b6a4a38b56d0046fa289db3cad6ce750f6bafb64"
     ;;
   "macOS ARM64")
     platform=macos-arm64
-    expected_sha256="5dc76f165852ad60e0eebf5e98da8bcc1ee1790c17023768b36dfa3373b0a016"
+    expected_sha256="ccf3ce7c6ea5d3c81a81ef76ab1762c6340d55eb3c61f9fd8460fd4d9cc11711"
     ;;
   *)
     echo "::error::Heidi Fix has no program for the runner ${RUNNER_OS:-unknown} ${RUNNER_ARCH:-unknown}. Use a runner Linux X64, Linux ARM64, or macOS ARM64."

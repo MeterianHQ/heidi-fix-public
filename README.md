@@ -1,6 +1,7 @@
 # Heidi Fix
 
-Heidi Fix finds the vulnerable dependencies of a repository and fixes them.
+Heidi Fix finds the vulnerable dependencies and the vulnerable code (SAST)
+of a repository and fixes them.
 It runs the build and the tests to verify each fix. Then it gives each
 verified fix to a person for review, for example as a pull request. Heidi Fix
 never merges a change.
@@ -23,7 +24,9 @@ Both ways use the same program. The GitHub Actions workflow downloads it and
 runs it for you.
 
 To try Heidi Fix on your computer for the first time, read
-[Get started](docs/getting-started.md).
+[Get started](docs/getting-started.md). For a machine that cannot download from
+GitHub at run time, read
+[The bundled program](docs/getting-started.md#the-bundled-program).
 
 ## The documentation
 
@@ -31,7 +34,7 @@ To try Heidi Fix on your computer for the first time, read
 |---|---|
 | [Get started](docs/getting-started.md) | Do a first run of Heidi Fix on your computer in five steps. |
 | [Use Heidi Fix on your computer](docs/command-line.md) | Install the program, log in to an agent, run Heidi Fix, repair a branch after an upgrade, and read the report. |
-| [The configuration](docs/configuration.md) | The configuration files and their settings: the policy, the budgets, the build commands, the upgrade limit, an on-prem or a dedicated Meterian instance, and more. |
+| [The configuration](docs/configuration.md) | The configuration files and their settings: the policy, the budgets, the build commands, the scan type, the upgrade limit, an on-prem or a dedicated Meterian instance, and more. |
 | [Use Heidi Fix in GitHub Actions](docs/github-actions.md) | Set up the reusable workflow, the tools of your build, the tokens, and the upgrade limit. |
 | [Fixes for a pull request](docs/pull-requests.md) | Fix the vulnerable dependencies of a pull request before the merge. |
 | [Security in GitHub Actions](docs/security.md) | How Heidi Fix keeps the write token away from the agent. |

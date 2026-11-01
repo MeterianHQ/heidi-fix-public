@@ -1,6 +1,6 @@
 name: Heidi Fix - fix
 description: >-
-  Finds and fixes the vulnerable dependencies, verifies each fix with the build and the tests,
+  Finds and fixes the vulnerable dependencies and the vulnerable code, verifies each fix with the build and the tests,
   and keeps each verified fix as a local branch. This job must not have a write token.
 
 inputs:
